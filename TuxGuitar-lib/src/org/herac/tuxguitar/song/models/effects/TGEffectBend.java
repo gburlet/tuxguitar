@@ -30,7 +30,12 @@ public abstract class TGEffectBend {
 		this.points = new ArrayList<BendPoint>();
 	}
 	
-	public void addPoint(int position,int value){
+	public void addPoint(int position, int value){
+		// don't start with value zero and don't add sequential duplicates
+		int numPoints = this.points.size();
+		if ((numPoints == 0 && value == 0) || (numPoints > 0 && this.points.get(numPoints-1).getValue() == value)) {
+			return;
+		}
 		this.points.add(new BendPoint(position,value));
 	}
 	

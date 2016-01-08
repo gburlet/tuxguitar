@@ -2,6 +2,7 @@ package org.herac.tuxguitar.io.musicxml;
 
 import java.io.OutputStream;
 import java.util.Iterator;
+import java.util.List;
 
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
@@ -25,12 +26,16 @@ import org.herac.tuxguitar.song.models.TGDivisionType;
 import org.herac.tuxguitar.song.models.TGDuration;
 import org.herac.tuxguitar.song.models.TGMeasure;
 import org.herac.tuxguitar.song.models.TGNote;
+import org.herac.tuxguitar.song.models.TGNoteEffect;
 import org.herac.tuxguitar.song.models.TGSong;
 import org.herac.tuxguitar.song.models.TGString;
 import org.herac.tuxguitar.song.models.TGTempo;
 import org.herac.tuxguitar.song.models.TGTimeSignature;
 import org.herac.tuxguitar.song.models.TGTrack;
 import org.herac.tuxguitar.song.models.TGVoice;
+import org.herac.tuxguitar.song.models.effects.TGEffectBend;
+import org.herac.tuxguitar.song.models.effects.TGEffectHarmonic;
+import org.herac.tuxguitar.song.models.effects.TGEffectTremoloPicking;
 import org.w3c.dom.Attr;
 import org.w3c.dom.Document;
 import org.w3c.dom.Node;
@@ -65,8 +70,18 @@ public class MusicXMLWriter {
 	
 	private Document document;
 	
+	private Node prevSlideNotation;
+	private int prevSlideString;
+	private Node prevHammerTechnical;
+	private int prevHammerNoteFret;
+	
 	public MusicXMLWriter(OutputStream stream){
 		this.stream = stream;
+		
+		this.prevSlideNotation = null;
+		this.prevSlideString = -1;
+		this.prevHammerTechnical = null;
+		this.prevHammerNoteFret = -1;
 	}
 	
 	public void writeSong(TGSong song) throws TGFileFormatException{
@@ -143,7 +158,10 @@ public class MusicXMLWriter {
 			Node part = this.addAttribute(this.addNode(parent,"part"), "id", "P" + track.getNumber());
 			
 			TGMeasure previous = null;
-			
+			this.prevSlideNotation = null;
+			this.prevSlideString = -1;
+			this.prevHammerTechnical = null;
+			this.prevHammerNoteFret = -1;
 			Iterator<TGMeasure> measures = track.getMeasures();
 			while(measures.hasNext()){
 				// TODO: Add multivoice support.
@@ -274,18 +292,133 @@ public class MusicXMLWriter {
 						this.addNode(pitchNode,"alter", ( ks <= 7 ? "1" : "-1" ) );
 					}
 					
-					Node technicalNode = this.addNode(this.addNode(noteNode, "notations"), "technical");
+					Node notationsNode = this.addNode(noteNode, "notations");
+					Node technicalNode = this.addNode(notationsNode, "technical");
 					this.addNode(technicalNode,"fret", Integer.toString( note.getValue() ));
 					this.addNode(technicalNode,"string", Integer.toString( note.getString() ));
 					
 					this.addNode(noteNode,"voice","1");
 					this.writeDuration(noteNode, voice.getDuration());
 					
+					// finish off slides and hammer ons
+					if (this.prevSlideNotation != null) {
+						if (note.getString() == this.prevSlideString) {
+							// it's definitely a normal slide
+							Node prevSlideNode = this.addNode(this.prevSlideNotation, "slide");
+							this.addAttribute(prevSlideNode, "type", "start");
+							Node slideNode = this.addNode(notationsNode, "slide");
+							this.addAttribute(slideNode, "type", "stop");
+						} else {
+							// it's a scoop or plop (make it a scoop: tuxguitar doesn't encode any of this ... sigh)
+							Node prevArticulationsNode = this.addNode(this.prevSlideNotation, "articulations");
+							this.addNode(prevArticulationsNode, "scoop");
+						}
+						this.prevSlideNotation = null;
+						this.prevSlideString = -1;
+						
+					} else if (this.prevHammerTechnical != null) {
+						// the last note started a hammer on or pull off; find out which
+						if (this.prevHammerNoteFret <= note.getValue()) {
+							// it's a hammer on
+							Node hammerNodePrev = this.addNode(this.prevHammerTechnical, "hammer-on", "H");
+							this.addAttribute(hammerNodePrev, "type", "start");
+							
+							Node hammerNode = this.addNode(technicalNode, "hammer-on");
+							this.addAttribute(hammerNode, "type", "stop");
+						} else {
+							// it's a pull off
+							Node hammerNodePrev = this.addNode(this.prevHammerTechnical, "pull-off", "P");
+							this.addAttribute(hammerNodePrev, "type", "start");
+							
+							Node hammerNode = this.addNode(technicalNode, "pull-off");
+							this.addAttribute(hammerNode, "type", "stop");
+						}
+						this.prevHammerNoteFret = -1;
+						this.prevHammerTechnical = null;
+					}
+					
+					// encode note effects
+					TGNoteEffect noteEffect = note.getEffect();
+					if(noteEffect.isGhostNote()) {
+						Node noteHeadNode = this.addNode(noteNode, "notehead", "normal");
+						this.addAttribute(noteHeadNode, "parentheses", "yes");
+					}
+					if(noteEffect.isDeadNote()) {
+						this.addNode(noteNode, "notehead", "x");
+					}
+					if(noteEffect.isGrace()) {
+						Node noteGraceNode = this.addNode(noteNode, "grace");
+						this.addAttribute(noteGraceNode, "slash", "yes");
+					}
+					if(noteEffect.isPalmMute()) {
+						this.addNode(technicalNode, "other-technical", "palm mute");
+					}
+					if(noteEffect.isLetRing()) {
+						this.addNode(technicalNode, "other-technical", "let ring");
+					}
+					if(noteEffect.isBend()) {
+						TGEffectBend bend = noteEffect.getBend();
+						List<TGEffectBend.BendPoint> bendPoints = bend.getPoints();
+						for (int i = 0; i < bendPoints.size(); i++) {
+							TGEffectBend.BendPoint bp = bendPoints.get(i);
+							double bendSemitones = (double) bp.getValue() / 2;
+							Node bendNode = this.addNode(technicalNode, "bend");
+							if (i == bendPoints.size()-1 && bp.getValue() == 0) {
+								// this is the last bend point, release
+								this.addNode(bendNode, "release");
+							} else {
+								String bendValString;
+								if (bendSemitones == (int) bendSemitones) {
+									bendValString = String.format("%.0f", bendSemitones);
+								} else {
+									bendValString = String.format("%.1f", bendSemitones);
+								}
+								this.addNode(bendNode, "bend-alter", bendValString);
+							}
+						}
+					}
+					if(noteEffect.isHarmonic()) {
+						TGEffectHarmonic harmonic = noteEffect.getHarmonic();
+						Node noteHeadNode = this.addNode(noteNode, "notehead", "diamond");
+						this.addAttribute(noteHeadNode, "filled", "yes");
+						Node harmonicNode = this.addNode(technicalNode, "harmonic");
+						if (harmonic.isNatural()) {
+							this.addNode(harmonicNode, "natural");
+						} else if (harmonic.isArtificial()) {
+							this.addNode(harmonicNode, "artificial");
+							this.addNode(harmonicNode, "touching-pitch", Integer.toString(harmonic.getData()));
+						}
+					}
+					if(noteEffect.isTapping()) {
+						this.addNode(technicalNode, "tap");
+					}
+					if(noteEffect.isTrill()) {
+						Node ornamentsNode = this.addNode(notationsNode, "ornaments");
+						Node trillMarkNode = this.addNode(ornamentsNode, "trill-mark");
+						this.addAttribute(trillMarkNode, "placement", "above");
+					}
+					if(noteEffect.isTremoloPicking()) {
+						TGEffectTremoloPicking tremPickingEffect = noteEffect.getTremoloPicking();
+						int quickness = (int) (Math.log(tremPickingEffect.getDuration().getValue())/Math.log(2)) - 2;
+						if (quickness < 0) quickness = 0;
+						if (quickness > 8) quickness = 8;
+						Node ornamentsNode = this.addNode(notationsNode, "ornaments");
+						Node tremoloNode = this.addNode(ornamentsNode, "tremolo", Integer.toString(quickness));
+						this.addAttribute(tremoloNode, "placement", "above");
+					}
+					if(noteEffect.isSlide()) {
+						this.prevSlideNotation = notationsNode;
+						this.prevSlideString = note.getString();
+					}
+					if(noteEffect.isHammer()) {
+						this.prevHammerTechnical = technicalNode;
+						this.prevHammerNoteFret = note.getValue();
+					}
 					if(note.isTiedNote()){
-						this.addAttribute(this.addNode(noteNode,"tie"),"type","stop");
+						this.addAttribute(this.addNode(noteNode, "tie"), "type", "stop");
 					}
 					if(n > 0){
-						this.addNode(noteNode,"chord");
+						this.addNode(noteNode, "chord");
 					}
 				}
 			}
