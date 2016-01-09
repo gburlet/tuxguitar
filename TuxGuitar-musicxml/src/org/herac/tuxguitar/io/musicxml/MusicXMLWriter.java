@@ -37,7 +37,9 @@ import org.herac.tuxguitar.song.models.effects.TGEffectBend;
 import org.herac.tuxguitar.song.models.effects.TGEffectHarmonic;
 import org.herac.tuxguitar.song.models.effects.TGEffectTremoloPicking;
 import org.w3c.dom.Attr;
+import org.w3c.dom.DOMImplementation;
 import org.w3c.dom.Document;
+import org.w3c.dom.DocumentType;
 import org.w3c.dom.Node;
 
 public class MusicXMLWriter {
@@ -488,12 +490,21 @@ public class MusicXMLWriter {
 	
 	private void saveDocument() {
 		try {
-			TransformerFactory xformFactory = TransformerFactory.newInstance();
-			Transformer idTransform = xformFactory.newTransformer();
+			TransformerFactory transformerFactory = TransformerFactory.newInstance();
+			Transformer transformer = transformerFactory.newTransformer();
+			transformer.setOutputProperty(OutputKeys.INDENT, "yes");
+			transformer.setOutputProperty(OutputKeys.OMIT_XML_DECLARATION, "no");
+			transformer.setOutputProperty(OutputKeys.METHOD, "xml");
+			DOMImplementation domImpl = document.getImplementation();
+			DocumentType doctype = domImpl.createDocumentType(
+				"score-partwise",
+				"-//Recordare//DTD MusicXML 3.0 Partwise//EN",
+			    "http://www.musicxml.org/dtds/partwise.dtd");
+			transformer.setOutputProperty(OutputKeys.DOCTYPE_PUBLIC, doctype.getPublicId());
+			transformer.setOutputProperty(OutputKeys.DOCTYPE_SYSTEM, doctype.getSystemId());
 			Source input = new DOMSource(this.document);
 			Result output = new StreamResult(this.stream);
-			idTransform.setOutputProperty(OutputKeys.INDENT, "yes");
-			idTransform.transform(input, output);
+			transformer.transform(input, output);
 		}catch(Throwable throwable){
 			throwable.printStackTrace();
 		}
