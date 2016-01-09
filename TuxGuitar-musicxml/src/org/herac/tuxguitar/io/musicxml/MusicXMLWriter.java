@@ -361,14 +361,17 @@ public class MusicXMLWriter {
 					if(noteEffect.isBend()) {
 						TGEffectBend bend = noteEffect.getBend();
 						List<TGEffectBend.BendPoint> bendPoints = bend.getPoints();
+						Node prevBendNode = null;
 						for (int i = 0; i < bendPoints.size(); i++) {
 							TGEffectBend.BendPoint bp = bendPoints.get(i);
-							double bendSemitones = (double) bp.getValue() / 2;
-							Node bendNode = this.addNode(technicalNode, "bend");
 							if (i == bendPoints.size()-1 && bp.getValue() == 0) {
 								// this is the last bend point, release
-								this.addNode(bendNode, "release");
+								if (prevBendNode != null) {
+									this.addNode(prevBendNode, "release");
+								}
 							} else {
+								double bendSemitones = (double) bp.getValue() / 2;
+								Node bendNode = this.addNode(technicalNode, "bend");
 								String bendValString;
 								if (bendSemitones == (int) bendSemitones) {
 									bendValString = String.format("%.0f", bendSemitones);
@@ -376,6 +379,7 @@ public class MusicXMLWriter {
 									bendValString = String.format("%.1f", bendSemitones);
 								}
 								this.addNode(bendNode, "bend-alter", bendValString);
+								prevBendNode = bendNode;
 							}
 						}
 					}
