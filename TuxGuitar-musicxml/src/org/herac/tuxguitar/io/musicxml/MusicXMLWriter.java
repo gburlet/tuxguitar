@@ -395,7 +395,7 @@ public class MusicXMLWriter {
 							this.addNode(harmonicNode, "natural");
 						} else if (harmonic.isArtificial()) {
 							this.addNode(harmonicNode, "artificial");
-							this.addNode(harmonicNode, "touching-pitch", Integer.toString(harmonic.getData()));
+							this.addNode(harmonicNode, "touching-pitch");
 						}
 					}
 					if(noteEffect.isTapping()) {
