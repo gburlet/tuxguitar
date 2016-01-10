@@ -283,6 +283,7 @@ public class MusicXMLWriter {
 				int noteCount = voice.countNotes();
 				for(int n = 0; n < noteCount; n ++){
 					TGNote note = voice.getNote( n );
+					TGNoteEffect noteEffect = note.getEffect();
 					
 					Node noteNode = this.addNode(parent,"note");
 					int value = (beat.getMeasure().getTrack().getString(note.getString()).getValue() + note.getValue());
@@ -300,7 +301,10 @@ public class MusicXMLWriter {
 					this.addNode(technicalNode,"string", Integer.toString( note.getString() ));
 					
 					this.addNode(noteNode,"voice","1");
-					this.writeDuration(noteNode, voice.getDuration());
+					
+					if (!noteEffect.isGrace()) {
+						this.writeDuration(noteNode, voice.getDuration());
+					}
 					
 					// finish off slides and hammer ons
 					if (this.prevSlideNotation != null) {
@@ -340,7 +344,6 @@ public class MusicXMLWriter {
 					}
 					
 					// encode note effects
-					TGNoteEffect noteEffect = note.getEffect();
 					if(noteEffect.isGhostNote()) {
 						Node noteHeadNode = this.addNode(noteNode, "notehead", "normal");
 						this.addAttribute(noteHeadNode, "parentheses", "yes");
