@@ -344,12 +344,18 @@ public class MusicXMLWriter {
 					}
 					
 					// encode note effects
+					Node noteHeadNode = null;
 					if(noteEffect.isGhostNote()) {
-						Node noteHeadNode = this.addNode(noteNode, "notehead", "normal");
+						noteHeadNode = this.addNode(noteNode, "notehead", "normal");
+						noteHeadNode.setTextContent("normal");
 						this.addAttribute(noteHeadNode, "parentheses", "yes");
 					}
 					if(noteEffect.isDeadNote()) {
-						this.addNode(noteNode, "notehead", "x");
+						if (noteHeadNode == null) {
+							noteHeadNode = this.addNode(noteNode, "notehead", "x");
+						} else {
+							noteHeadNode.setTextContent("x");
+						}
 					}
 					if(noteEffect.isGrace()) {
 						Node noteGraceNode = this.addNode(noteNode, "grace");
@@ -388,7 +394,11 @@ public class MusicXMLWriter {
 					}
 					if(noteEffect.isHarmonic()) {
 						TGEffectHarmonic harmonic = noteEffect.getHarmonic();
-						Node noteHeadNode = this.addNode(noteNode, "notehead", "diamond");
+						if (noteHeadNode == null) {
+							noteHeadNode = this.addNode(noteNode, "notehead", "diamond");
+						} else {
+							noteHeadNode.setTextContent("diamond");
+						}
 						this.addAttribute(noteHeadNode, "filled", "yes");
 						Node harmonicNode = this.addNode(technicalNode, "harmonic");
 						if (harmonic.isNatural()) {
