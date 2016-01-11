@@ -216,6 +216,9 @@ public class MusicXMLWriter {
 			this.addNode(stringNode, "tuning-step", NOTE_NAMES[ NOTE_SHARPS[ (string.getValue() % 12) ] ] );
 			this.addNode(stringNode, "tuning-octave", Integer.toString(string.getValue() / 12) );
 		}
+		if (track.getOffset() > 0) {
+			this.addNode(staffDetailsNode, "capo", Integer.toString(track.getOffset()));
+		}
 	}
 	
 	private void writeTimeSignature(Node parent, TGTimeSignature ts){
