@@ -291,6 +291,11 @@ public class MusicXMLWriter {
 					Node noteNode = this.addNode(parent,"note");
 					int value = (beat.getMeasure().getTrack().getString(note.getString()).getValue() + note.getValue());
 					
+					if(noteEffect.isGrace()) {
+						Node noteGraceNode = this.addNode(noteNode, "grace");
+						this.addAttribute(noteGraceNode, "slash", "yes");
+					}
+					
 					Node pitchNode = this.addNode(noteNode,"pitch");
 					this.addNode(pitchNode,"step",NOTE_NAMES[ (ks <= 7 ? NOTE_SHARPS[value % 12] : NOTE_FLATS[value % 12] )]);
 					this.addNode(pitchNode,"octave",Integer.toString(value / 12));
@@ -359,10 +364,6 @@ public class MusicXMLWriter {
 						} else {
 							noteHeadNode.setTextContent("x");
 						}
-					}
-					if(noteEffect.isGrace()) {
-						Node noteGraceNode = this.addNode(noteNode, "grace");
-						this.addAttribute(noteGraceNode, "slash", "yes");
 					}
 					if(noteEffect.isPalmMute()) {
 						this.addNode(technicalNode, "other-technical", "palm mute");
