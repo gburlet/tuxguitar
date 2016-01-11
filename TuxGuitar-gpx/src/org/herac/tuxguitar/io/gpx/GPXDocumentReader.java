@@ -18,6 +18,15 @@ import org.w3c.dom.Document;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 
+import java.io.File;
+import javax.xml.transform.Transformer;
+import javax.xml.transform.TransformerException;
+import javax.xml.transform.TransformerFactory;
+import javax.xml.transform.Result;
+import javax.xml.transform.Source;
+import javax.xml.transform.stream.StreamResult;
+import javax.xml.transform.dom.DOMSource;
+
 public class GPXDocumentReader {
 	
 	private Document xmlDocument;
@@ -37,8 +46,19 @@ public class GPXDocumentReader {
 		return null;
 	}
 	
+	public void xml2file() {
+		try {
+			Transformer transformer = TransformerFactory.newInstance().newTransformer();
+			Result output = new StreamResult(new File(System.getProperty("user.home")+"/output.xml"));
+			Source input = new DOMSource(this.xmlDocument);
+
+			transformer.transform(input, output);
+		} catch (TransformerException e) {}
+	}
+	
 	public GPXDocument read(){
 		if( this.xmlDocument != null ){
+			//xml2file(); // for debug (saves xml file in home directory)
 			this.readScore();
 			this.readAutomations();
 			this.readTracks();
@@ -119,15 +139,17 @@ public class GPXDocumentReader {
 								if( getAttributeValue(propertyNode, "name").equals("Tuning") ){
 									track.setTunningPitches( getChildNodeIntegerContentArray(propertyNode, "Pitches") );
 								}
+                                                                else if( getAttributeValue(propertyNode, "name").equals("CapoFret") ){
+									track.setCapo( getChildNodeIntegerContent(propertyNode, "Fret") );
 							}
 						}
+					}
 					}
 					this.gpxDocument.getTracks().add( track );
 				}
 			}
 		}
 	}
-	
 	public void readMasterBars(){
 		if( this.xmlDocument != null ){
 			NodeList masterBarNodes = getChildNodeList(this.xmlDocument.getFirstChild(), "MasterBars");
@@ -145,6 +167,16 @@ public class GPXDocumentReader {
 						if( getAttributeBooleanValue(repeatNode, "end") ){
 							masterBar.setRepeatCount( getAttributeIntegerValue(repeatNode, "count"));
 						}
+					}
+					Node alternativeNode = getChildNode(masterBarNode, "AlternateEndings");
+					if( alternativeNode!=null){
+						masterBar.setRepeatAlternative( getChildNodeIntegerContentArray(masterBarNode, "AlternateEndings"));
+					}
+					
+					Node sectionNode = getChildNode(masterBarNode, "Section");
+					if( sectionNode!=null){
+						masterBar.setSectionLetter(getChildNodeContent(sectionNode, "Letter"));	
+						masterBar.setSectionText(getChildNodeContent(sectionNode, "Text"));						
 					}
 					
 					Node keyNode = getChildNode(masterBarNode, "Key");
@@ -205,6 +237,9 @@ public class GPXDocumentReader {
 					beat.setRhythmId(getAttributeIntegerValue(getChildNode(beatNode, "Rhythm"), "ref"));
 					beat.setTremolo( getChildNodeIntegerContentArray(beatNode, "Tremolo", "/"));
 					beat.setNoteIds( getChildNodeIntegerContentArray(beatNode, "Notes"));
+					beat.setText( getChildNodeContent(beatNode, "FreeText"));
+					beat.setFading( getChildNodeContent(beatNode, "Fadding"));
+					beat.setGrace( getChildNodeContent(beatNode, "GraceNotes"));
 					
 					NodeList propertyNodes = getChildNodeList(beatNode, "Properties");
 					if( propertyNodes != null ){
@@ -237,6 +272,23 @@ public class GPXDocumentReader {
 								if( propertyName.equals("WhammyBarDestinationOffset") ){
 									beat.setWhammyBarDestinationOffset( new Integer(getChildNodeIntegerContent(propertyNode, "Float")) );
 								}
+                                                                if (propertyName.equals("VibratoWTremBar")) // has a child Strength with String contentn Wide or Slight                                                                   
+                                                                        beat.setVibrato( true );
+                                                                if (propertyName.equals("Brush")) 
+                                                                        beat.setBrush( getChildNodeContent(propertyNode, "Direction"));
+							}
+						}
+					}
+					
+					NodeList xpropertyNodes = getChildNodeList(beatNode, "XProperties");
+					if( xpropertyNodes != null ){
+						for( int p = 0 ; p < xpropertyNodes.getLength() ; p ++ ){
+							Node xpropertyNode = xpropertyNodes.item( p );
+							if (xpropertyNode.getNodeName().equals("XProperty") ){ 
+								int propertyId = getAttributeIntegerValue(xpropertyNode, "id");
+								if( propertyId == 687935489 ){									
+									beat.setBrushDuration(getChildNodeIntegerContent(xpropertyNode, "Int"));
+								}
 							}
 						}
 					}
@@ -266,7 +318,7 @@ public class GPXDocumentReader {
 					
 					note.setAccent(getChildNodeIntegerContent(noteNode, "Accent"));
 					note.setTrill(getChildNodeIntegerContent(noteNode, "Trill"));
-
+                                        note.setLetRing( getChildNode(noteNode, "LetRing") != null );
 					note.setVibrato( getChildNode(noteNode, "Vibrato") != null );
 					
 					NodeList propertyNodes = getChildNodeList(noteNode, "Properties");
@@ -344,6 +396,19 @@ public class GPXDocumentReader {
 								}
 								if( propertyName.equals("HarmonicType") ){
 									note.setHarmonicType( getChildNodeContent (propertyNode, "HType"));
+								}
+							}
+						}
+					}
+					
+					NodeList xpropertyNodes = getChildNodeList(noteNode, "XProperties");
+					if( xpropertyNodes != null ){
+						for( int p = 0 ; p < xpropertyNodes.getLength() ; p ++ ){
+							Node xpropertyNode = xpropertyNodes.item( p );
+							if (xpropertyNode.getNodeName().equals("XProperty") ){ 
+								int propertyId = getAttributeIntegerValue(xpropertyNode, "id");
+								if( propertyId == 688062467 ){									
+									note.setTrillDuration(getChildNodeIntegerContent(xpropertyNode, "Int"));
 								}
 							}
 						}

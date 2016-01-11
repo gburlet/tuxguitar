@@ -20,7 +20,9 @@ import org.herac.tuxguitar.song.managers.TGSongManager;
 import org.herac.tuxguitar.song.models.TGBeat;
 import org.herac.tuxguitar.song.models.TGChannel;
 import org.herac.tuxguitar.song.models.TGChannelParameter;
+import org.herac.tuxguitar.song.models.TGColor;
 import org.herac.tuxguitar.song.models.TGDuration;
+import org.herac.tuxguitar.song.models.TGMarker;
 import org.herac.tuxguitar.song.models.TGMeasure;
 import org.herac.tuxguitar.song.models.TGMeasureHeader;
 import org.herac.tuxguitar.song.models.TGNote;
@@ -32,10 +34,13 @@ import org.herac.tuxguitar.song.models.TGTrack;
 import org.herac.tuxguitar.song.models.TGVelocities;
 import org.herac.tuxguitar.song.models.TGVoice;
 import org.herac.tuxguitar.song.models.effects.TGEffectBend;
+import org.herac.tuxguitar.song.models.effects.TGEffectGrace;
 import org.herac.tuxguitar.song.models.effects.TGEffectHarmonic;
 import org.herac.tuxguitar.song.models.effects.TGEffectTremoloBar;
 import org.herac.tuxguitar.song.models.effects.TGEffectTremoloPicking;
 import org.herac.tuxguitar.song.models.effects.TGEffectTrill;
+
+// TODO: letring throughout
 
 public class GPXDocumentParser {
 	
@@ -43,6 +48,8 @@ public class GPXDocumentParser {
 	private static final float GP_BEND_SEMITONE =  25f;
 	private static final float GP_WHAMMY_BAR_POSITION = 100f;
 	private static final float GP_WHAMMY_BAR_SEMITONE =  50f;
+	
+	private TGEffectGrace grace = null;
 	
 	private TGFactory factory;
 	private GPXDocument document;
@@ -73,6 +80,7 @@ public class GPXDocumentParser {
 	}
 	
 	private void parseTracks(TGSong tgSong){
+		boolean hasPercussion = false;
 		List<GPXTrack> tracks = this.document.getTracks();
 		for( int i = 0 ; i < tracks.size(); i ++ ){
 			GPXTrack gpTrack = (GPXTrack) this.document.getTracks().get(i);
@@ -124,6 +132,7 @@ public class GPXDocumentParser {
 				for( int s = 1; s <= 6 ; s ++ ){
 					tgTrack.getStrings().add(TGSongManager.newString(this.factory, s, 0));
 				}
+                hasPercussion = true;
 			}else{
 				tgTrack.getStrings().add(TGSongManager.newString(this.factory,1, 64));
 				tgTrack.getStrings().add(TGSongManager.newString(this.factory,2, 59));
@@ -137,8 +146,34 @@ public class GPXDocumentParser {
 				tgTrack.getColor().setG(gpTrack.getColor()[1]);
 				tgTrack.getColor().setB(gpTrack.getColor()[2]);
 			}
+                        tgTrack.setOffset(gpTrack.getCapo());
 			tgSong.addTrack(tgTrack);
 		}
+                if (!hasPercussion){ // for metronome and count down
+                    TGChannel percussion = this.factory.newChannel();      
+                    percussion.setChannelId( tgSong.countChannels() + 1 );
+                    percussion.setName(("#" + percussion.getChannelId()));  
+                    percussion.setBank(TGChannel.DEFAULT_PERCUSSION_BANK);
+                    percussion.setProgram(TGChannel.DEFAULT_PERCUSSION_PROGRAM);
+                    tgSong.addChannel(percussion);
+	}
+	}
+	
+	private TGMarker parseSectionText(String text, String letter, int measure) {
+		if (text != null)
+			text = text.trim();
+		if (letter != null)
+			letter = letter.trim();
+		if (letter != null && letter.length()>0)
+			text = "["+letter+"] "+text;
+		if (text != null && text.length()>0) {
+			TGMarker sectionText = this.factory.newMarker();
+			sectionText.setMeasure(measure);
+			sectionText.setTitle(text.trim());
+			sectionText.setColor(TGColor.GREEN);
+			return sectionText;
+		}
+		return null;
 	}
 	
 	private void parseMasterBars(TGSong tgSong){
@@ -153,7 +188,18 @@ public class GPXDocumentParser {
 			tgMeasureHeader.setStart(tgStart);
 			tgMeasureHeader.setNumber( i + 1 );
 			tgMeasureHeader.setRepeatOpen(mbar.isRepeatStart());
-			tgMeasureHeader.setRepeatClose(mbar.getRepeatCount());
+
+			if(mbar.getRepeatAlternative() != null) {
+				int repeats = 0;
+				// each byte for each checkbox
+				for (int ri = 0; ri < mbar.getRepeatAlternative().length; ri++) {
+					repeats += Math.pow(2,mbar.getRepeatAlternative()[ri]-1);
+				}
+				tgMeasureHeader.setRepeatAlternative(repeats);
+			}
+			
+			tgMeasureHeader.setMarker(parseSectionText(mbar.getSectionText(), mbar.getSectionLetter(), tgMeasureHeader.getNumber()));			
+			tgMeasureHeader.setRepeatClose(mbar.getRepeatCount()-1);
 			tgMeasureHeader.setTripletFeel(parseTripletFeel(mbar));
 			if( mbar.getTime() != null && mbar.getTime().length == 2){
 				tgMeasureHeader.getTimeSignature().setNumerator(mbar.getTime()[0]);
@@ -237,16 +283,33 @@ public class GPXDocumentParser {
 							GPXBeat beat = this.document.getBeat( voice.getBeatIds()[b] );
 							GPXRhythm gpRhythm = this.document.getRhythm( beat.getRhythmId() );
 							
+							if (beat.getGrace()!=null) {
+								TGDuration tgDuration = this.factory.newDuration();
+								this.parseRhythm(gpRhythm, tgDuration);
+								if( beat.getNoteIds() != null ){
+									int tgVelocity = this.parseDynamic(beat);
+									
+									for( int n = 0 ; n < beat.getNoteIds().length; n ++ ){
+										GPXNote gpNote = this.document.getNote( beat.getNoteIds()[n] );
+										if( gpNote != null ){
+												this.parseGrace(gpNote, tgDuration, tgVelocity, beat.getGrace());
+												break;
+										}
+									}
+								}
+								continue;
+							}
 							TGBeat tgBeat = getBeat(tgMeasure, tgStart);
 							TGVoice tgVoice = tgBeat.getVoice( v % tgBeat.countVoices() );
 							tgVoice.setEmpty(false);
-							tgBeat.getStroke().setDirection( this.parseStroke(beat) );
+							parseStroke(tgBeat.getStroke(), beat);
 
-							if (beat.getText().length() > 0) {
+							if (beat.getText() != null && beat.getText().trim().length() > 0) {
 								TGText text = this.factory.newText();
 								text.setValue(beat.getText().trim());
 								text.setBeat(tgBeat);
 								tgBeat.setText(text);
+								
 							}
 							
 							this.parseRhythm(gpRhythm, tgVoice.getDuration());
@@ -260,7 +323,6 @@ public class GPXDocumentParser {
 									}
 								}
 							}
-							
 							tgStart += tgVoice.getDuration().getTime();
 						}
 					}
@@ -271,6 +333,66 @@ public class GPXDocumentParser {
 		if( tgMeasure.getNumber() == 1 ){
 			this.fixFirstMeasureStartPositions(tgMeasure);
 		}
+	}
+	
+	private void parseSlideFlags(int flags, TGNote note, int tgVelocity) {
+		// 32 - from high, 16 - from low
+		// 2 - normal slide, 1 - slide and pick (normal in TG)
+		// 4 - to low, 8 - to high
+		boolean slide = false;
+		if ((flags & 32) > 0 || (flags & 16) > 0) {
+			// basicly add a Grace Effect
+			TGEffectGrace grace = this.factory.newEffectGrace();
+                        int fret = note.getValue();
+                        if ((flags & 32) > 0)
+                            fret += 12;
+                        else
+                            fret -= 12;
+                        if (fret<0)
+                            fret = 0;
+                        else if (fret>24)
+                            fret = 24;
+			grace.setFret(fret);
+			grace.setOnBeat(false);	
+			grace.setDuration(2); // THIRTY_SECOND
+			grace.setTransition(TGEffectGrace.TRANSITION_SLIDE);
+			grace.setDynamic(tgVelocity);
+			note.getEffect().setGrace(grace);
+		}
+		if ((flags & 8) > 0 || (flags & 4) > 0 || (flags & 1) > 0)
+			// I have no idea how I can realize these two in current TG, possibly only if i'll add grace to next note
+			slide = true;
+		if ((flags & 2) > 0) {
+			note.getEffect().setHammer(true);
+			//slide = true;
+		}
+		note.getEffect().setSlide(slide);
+	}
+	
+	private void parseGrace(GPXNote gpNote, TGDuration tgDuration, int tgVelocity, String type) {
+		if (gpNote.getFret() < 0)
+			return;
+		TGEffectGrace grace = this.factory.newEffectGrace();
+		grace.setFret(gpNote.getFret());
+		grace.setOnBeat(type.equals("OnBeat"));	
+		grace.setDead(gpNote.isMutedEnabled());
+		int duration = tgDuration.getValue();
+		if (duration < 24)
+			duration = 3;
+		else if (duration < 48)
+			duration = 2;
+		else
+			duration = 1;
+		grace.setDuration(duration);
+		grace.setTransition(TGEffectGrace.TRANSITION_NONE);
+		if (gpNote.isHammer())
+			grace.setTransition(TGEffectGrace.TRANSITION_HAMMER);
+		if (gpNote.isSlide())
+			grace.setTransition(TGEffectGrace.TRANSITION_SLIDE);
+		if (gpNote.isBendEnabled())
+			grace.setTransition(TGEffectGrace.TRANSITION_BEND);
+		grace.setDynamic(tgVelocity);
+		this.grace = grace;
 	}
 	
 	private void parseNote(GPXNote gpNote, TGVoice tgVoice, int tgVelocity, GPXBeat gpBeat){
@@ -309,8 +431,21 @@ public class GPXDocumentParser {
 			tgNote.setString(tgString);
 			tgNote.setTiedNote(gpNote.isTieDestination());
 			tgNote.setVelocity(tgVelocity);
-			tgNote.getEffect().setFadeIn(gpBeat.isFadeIn());
-			tgNote.getEffect().setVibrato(gpNote.isVibrato());
+			
+			if (gpBeat.getFading()!=null) {
+				String type = gpBeat.getFading().trim();
+				boolean fadeIn = false, fadeOut = false; 
+				if (type.equals("FadeIn"))
+					fadeIn = true;
+				else if (type.equals("FadeOut"))
+					// not implemented in TG yet
+					fadeOut = true;
+				else if (type.equals("VolumeSwell")) {
+					fadeIn = fadeOut = true;
+				}
+				tgNote.getEffect().setFadeIn(fadeIn);
+			}
+			tgNote.getEffect().setVibrato(gpNote.isVibrato() || gpBeat.isVibrato());
 			tgNote.getEffect().setSlide(gpNote.isSlide());
 			tgNote.getEffect().setDeadNote(gpNote.isMutedEnabled());
 			tgNote.getEffect().setPalmMute(gpNote.isPalmMutedEnabled());
@@ -322,24 +457,39 @@ public class GPXDocumentParser {
 			tgNote.getEffect().setStaccato(gpNote.getAccent() == 1);
 			tgNote.getEffect().setHeavyAccentuatedNote(gpNote.getAccent() == 4);
 			tgNote.getEffect().setAccentuatedNote(gpNote.getAccent() == 8);
-			tgNote.getEffect().setTrill(parseTrill(gpNote));
+			tgNote.getEffect().setTrill(parseTrill(gpNote, tgVoice.getBeat().getMeasure().getTrack().getString(tgString)));
 			tgNote.getEffect().setTremoloPicking(parseTremoloPicking(gpBeat, gpNote));
 			tgNote.getEffect().setHarmonic(parseHarmonic( gpNote ) );
 			tgNote.getEffect().setBend(parseBend( gpNote ) );
 			tgNote.getEffect().setTremoloBar(parseTremoloBar( gpBeat ));
+			tgNote.getEffect().setLetRing(gpNote.isLetRing());
+			parseSlideFlags(gpNote.getSlideFlags(), tgNote, tgVelocity);
+                        if (grace != null)
+                            tgNote.getEffect().setGrace(grace);
+			grace = null;
 			
 			tgVoice.addNote( tgNote );
 		}
 	}
 	
-	private TGEffectTrill parseTrill(GPXNote gpNote){
+	private TGEffectTrill parseTrill(GPXNote gpNote, TGString currentString){
 		TGEffectTrill tr = null;
-		if( gpNote.getTrill() > 0 ){
+		if( gpNote.getTrill() > 0 && gpNote.getTrillDuration() > 0 ){
 			// A trill from string E frets 3 to 4 returns : <Trill>68</Trill> and <XProperties><XProperty id="688062467"><Int>30</Int></XProperty></XProperties>
+			// XProperty ranges from 30 to 480, where 480 = 1/4, 240 = 1/8, 120 = 1/16 and 30 = 1/64
 			// gpNote.getTrill() returns the MIDI note to trill this note with, TG wants a duration as well.
 			tr = this.factory.newEffectTrill();
-			tr.setFret(gpNote.getTrill());
-			// TODO: add a duration
+			tr.setFret(gpNote.getTrill()-currentString.getValue());
+			TGDuration duration = this.factory.newDuration();
+			int dValue = Math.round(1920/gpNote.getTrillDuration());
+			// that's the only values TG supports
+			if (dValue <= 24) // 1/4 to 1/24 -> 1/16
+				duration.setValue(TGDuration.SIXTEENTH);
+			else if (dValue <= 48) // 1/24 to 1/48 -> 1/32
+				duration.setValue(TGDuration.THIRTY_SECOND);
+			else // else -> 1/64
+				duration.setValue(TGDuration.SIXTY_FOURTH);
+			tr.setDuration(duration);
 		}
 		return tr;
 	}
@@ -505,15 +655,29 @@ public class GPXDocumentParser {
 		}
 	}
 	
-	private int parseStroke(GPXBeat beat){
-		int tgStroke = TGStroke.STROKE_NONE;
+	private void parseStroke(TGStroke tgStroke, GPXBeat beat){
+		int dir = TGStroke.STROKE_NONE;
 		String stroke = beat.getBrush(); 
+                if (!beat.getBrush().isEmpty() && beat.getBrushDuration()>0) {
 		if ( stroke.equals("Down")){
-			tgStroke = TGStroke.STROKE_DOWN;
+                    	dir = TGStroke.STROKE_DOWN;
 		}else if ( stroke.equals("Up")){
-			tgStroke = TGStroke.STROKE_UP;
+                    	dir = TGStroke.STROKE_UP;
 		}
-		return tgStroke;
+                    int dValue = Math.round(1920/beat.getBrushDuration());                    
+                    // that's the only values TG supports
+                    if (dValue <= 6) // 1/4 to 1/6 -> 1/4
+                    	tgStroke.setValue(TGDuration.QUARTER);
+                    else if (dValue <= 12) // 1/6 to 1/12 -> 1/8
+			tgStroke.setValue(TGDuration.EIGHTH);
+                    else if (dValue <= 24) // 1/12 to 1/24 -> 1/16
+			tgStroke.setValue(TGDuration.SIXTEENTH);
+                    else if (dValue <= 48) // 1/24 to 1/48 -> 1/32
+			tgStroke.setValue(TGDuration.THIRTY_SECOND);
+                    else // else -> 1/64
+                    	tgStroke.setValue(TGDuration.SIXTY_FOURTH);
+	}
+                tgStroke.setDirection(dir);
 	}
 	
 	private int parseDynamic(GPXBeat beat){

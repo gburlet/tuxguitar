@@ -8,11 +8,13 @@ public class GPXBeat {
 	private String dynamic;
 	private boolean slapped;
 	private boolean popped;
+        private boolean vibrato;
 	private String brush;	// up stroke, down stroke
+	private int brushDuration;
 	private int[] tremolo; // 1/8, 1/4, etc.
-	private boolean FadeIn;
-	private boolean FadeOut;
+	private String fading;
 	private String text;
+	private String grace;
 	
 	private boolean whammyBarEnabled;
 	private Integer whammyBarOriginValue;
@@ -27,9 +29,8 @@ public class GPXBeat {
 		this.slapped = false;
 		this.popped = false;
 		this.tremolo = null;
-		this.FadeIn = false;
-		this.FadeOut = false;
 		this.brush = new String();
+                this.brushDuration = 0;
 		this.text = new String();
 	}
 	
@@ -89,6 +90,14 @@ public class GPXBeat {
 		this.brush = brush;
 	}
 
+	public int getBrushDuration() {
+		return brushDuration;
+	}
+
+	public void setBrushDuration(int brushDuration) {
+		this.brushDuration = brushDuration;
+	}
+
 	public int[] getTremolo() {
 		return tremolo;
 	}
@@ -97,20 +106,28 @@ public class GPXBeat {
 		this.tremolo = tremolo;
 	}
 
-	public boolean isFadeIn() {
-		return FadeIn;
+	public boolean isVibrato() {
+		return vibrato;
 	}
 
-	public void setFadeIn(boolean fadeIn) {
-		FadeIn = fadeIn;
+	public void setVibrato(boolean vibrato) {
+		this.vibrato = vibrato;
 	}
 
-	public boolean isFadeOut() {
-		return FadeOut;
+	public String getFading() {
+		return fading;
 	}
 
-	public void setFadeOut(boolean fadeOut) {
-		FadeOut = fadeOut;
+	public void setFading(String fading) {
+		this.fading = fading;
+	}
+
+	public String getGrace() {
+		return grace;
+	}
+
+	public void setGrace(String grace) {
+		this.grace = grace;
 	}
 
 	public String getText() {
