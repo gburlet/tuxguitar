@@ -280,7 +280,7 @@ public class MusicXMLWriter {
 				Node noteNode = this.addNode(parent,"note");
 				this.addNode(noteNode,"rest");
 				this.addNode(noteNode,"voice","1");
-				this.writeDuration(noteNode, voice.getDuration());
+				this.writeDuration(noteNode, voice.getDuration(), false);
 			}
 			else{
 				int noteCount = voice.countNotes();
@@ -309,10 +309,7 @@ public class MusicXMLWriter {
 					this.addNode(technicalNode,"string", Integer.toString( note.getString() ));
 					
 					this.addNode(noteNode,"voice","1");
-					
-					if (!noteEffect.isGrace()) {
-						this.writeDuration(noteNode, voice.getDuration());
-					}
+					this.writeDuration(noteNode, voice.getDuration(), noteEffect.isGrace());
 					
 					// finish off slides and hammer ons
 					if (this.prevSlideNotation != null) {
@@ -448,7 +445,7 @@ public class MusicXMLWriter {
 		}
 	}
 	
-	private void writeDuration(Node parent, TGDuration duration){
+	private void writeDuration(Node parent, TGDuration duration, boolean isGrace){
 		int index = duration.getIndex();
 		if( index >=0 && index <= 6 ){
 			int value = (DURATION_VALUES[ index ] * duration.getDivision().getTimes() / duration.getDivision().getEnters());
@@ -459,7 +456,9 @@ public class MusicXMLWriter {
 				value += ((value / 4) * 3);
 			}
 			
-			this.addNode(parent,"duration",Integer.toString(value));
+			if (!isGrace) {
+				this.addNode(parent,"duration",Integer.toString(value));
+			}
 			this.addNode(parent,"type",DURATION_NAMES[ index ]);
 			
 			if(duration.isDotted()){
