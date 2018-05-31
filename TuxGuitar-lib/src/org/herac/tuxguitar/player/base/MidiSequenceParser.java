@@ -487,25 +487,43 @@ public class MidiSequenceParser {
 	}
 	
 	private int getRealVelocity(MidiSequenceHelper sh, TGNote note, TGTrack tgTrack, TGChannel tgChannel, int mIndex,int bIndex){
-		int velocity = note.getVelocity();
-		
-		//Check for Hammer effect
+        /*
+         * NOTE VELOCITY CODES:
+         * 1: DEAD NOTE
+         * 2: PALM MUTE
+         * 3: HAMMER
+         * 4: SLIDE
+         * 5: SLIDE IN/OUT
+         */
 		if(!tgChannel.isPercussionChannel()){
 			MidiNoteHelper previousNote = getPreviousNote(sh, note,tgTrack,mIndex,bIndex,false);
-			if(previousNote != null && previousNote.getNote().getEffect().isHammer()){
-				velocity = Math.max(TGVelocities.MIN_VELOCITY,(velocity - 25));
-			}
+
+            if(note.getEffect().isDeadNote()){
+                velocity = 1;
+            } else if(note.getEffect().isPalmMute()){
+                velocity = 2;
+            } else if(previousNote != null && previousNote.getNote().getEffect().isHammer()){
+				velocity = 3;
+			} else if(previousNote != null && previousNote.getNote().getEffect().isSlide()){
+                velocity = 4;
+            } else if ((previousNote != null && !previousNote.getNote().getEffect().isSlide() && note.getEffect().isSlide()) || (previousNote == null && note.getEffect().isSlide())) {
+                velocity = 5;
+            } 
 		}
 		
-		//Check for GhostNote effect
-		if(note.getEffect().isGhostNote()){
-			velocity = Math.max(TGVelocities.MIN_VELOCITY,(velocity - TGVelocities.VELOCITY_INCREMENT));
-		}else if(note.getEffect().isAccentuatedNote()){
-			velocity = Math.max(TGVelocities.MIN_VELOCITY,(velocity + TGVelocities.VELOCITY_INCREMENT));
-		}else if(note.getEffect().isHeavyAccentuatedNote()){
-			velocity = Math.max(TGVelocities.MIN_VELOCITY,(velocity + (TGVelocities.VELOCITY_INCREMENT * 2)));
-		}
-		
+        boolean hasVelocityCode = (velocity >= 1 && velocity <= 5)
+        if(!hasVelocityCode) {
+            int velocity = note.getVelocity();
+
+            if(note.getEffect().isGhostNote()){
+                velocity = Math.max(TGVelocities.MIN_VELOCITY,(velocity - TGVelocities.VELOCITY_INCREMENT));
+            }else if(note.getEffect().isAccentuatedNote()){
+                velocity = Math.max(TGVelocities.MIN_VELOCITY,(velocity + TGVelocities.VELOCITY_INCREMENT));
+            }else if(note.getEffect().isHeavyAccentuatedNote()){
+                velocity = Math.max(TGVelocities.MIN_VELOCITY,(velocity + (TGVelocities.VELOCITY_INCREMENT * 2)));
+            }
+        }
+
 		return ((velocity > 127)?127:velocity);
 	}
 	
