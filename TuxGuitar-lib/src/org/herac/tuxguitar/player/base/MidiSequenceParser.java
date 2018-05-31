@@ -306,10 +306,10 @@ public class MidiSequenceParser {
 						makeTremoloBar(sh,track.getNumber(),start,duration,note.getEffect().getTremoloBar(),channel,midiVoice,bendMode);
 					}
 					//---Slide---
-					else if( note.getEffect().isSlide() && !percussionChannel){
+					/*else if( note.getEffect().isSlide() && !percussionChannel){
 						bendMode = true;
 						makeSlide(sh, note, track, mIndex, bIndex, startMove, channel,midiVoice,bendMode);
-					}
+					}*/
 					//---Vibrato---
 					else if( note.getEffect().isVibrato() && !percussionChannel){
 						bendMode = true;
@@ -493,8 +493,8 @@ public class MidiSequenceParser {
          * 2: PALM MUTE
          * 3: HAMMER
          * 4: SLIDE
-         * 5: SLIDE IN/OUT
          */
+        int velocity = note.getVelocity();
 		if(!tgChannel.isPercussionChannel()){
 			MidiNoteHelper previousNote = getPreviousNote(sh, note,tgTrack,mIndex,bIndex,false);
 
@@ -506,15 +506,11 @@ public class MidiSequenceParser {
 				velocity = 3;
 			} else if(previousNote != null && previousNote.getNote().getEffect().isSlide()){
                 velocity = 4;
-            } else if ((previousNote != null && !previousNote.getNote().getEffect().isSlide() && note.getEffect().isSlide()) || (previousNote == null && note.getEffect().isSlide())) {
-                velocity = 5;
-            } 
+            }
 		}
 		
-        boolean hasVelocityCode = (velocity >= 1 && velocity <= 5)
+        boolean hasVelocityCode = (velocity >= 1 && velocity <= 4);
         if(!hasVelocityCode) {
-            int velocity = note.getVelocity();
-
             if(note.getEffect().isGhostNote()){
                 velocity = Math.max(TGVelocities.MIN_VELOCITY,(velocity - TGVelocities.VELOCITY_INCREMENT));
             }else if(note.getEffect().isAccentuatedNote()){
