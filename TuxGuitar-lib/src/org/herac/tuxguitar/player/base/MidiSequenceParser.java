@@ -315,7 +315,8 @@ public class MidiSequenceParser {
 						bendMode = true;
 						makeVibrato(sh,track.getNumber(),start,duration,channel,midiVoice,bendMode);
 					}
-					//---Harmonic---
+					/*
+                    //---Harmonic---
 					if( note.getEffect().isHarmonic() && !percussionChannel){
 						int orig = key;
 						
@@ -340,7 +341,7 @@ public class MidiSequenceParser {
 							int hVelocity = Math.max(TGVelocities.MIN_VELOCITY,velocity - (TGVelocities.VELOCITY_INCREMENT * 4));
 							makeNote(sh,track.getNumber(),(key - 12), start, duration,hVelocity,channel,midiVoice,bendMode);
 						}
-					}
+					}*/
 					
 					//---Normal Note---
 					makeNote(sh,track.getNumber(), Math.min(127,key), start, duration, velocity,channel,midiVoice,bendMode);
@@ -491,8 +492,10 @@ public class MidiSequenceParser {
          * NOTE VELOCITY CODES:
          * 1: DEAD NOTE
          * 2: PALM MUTE
-         * 3: HAMMER
-         * 4: SLIDE
+         * 3: NATURAL HARMONIC
+         * 4: SEMI(PINCH) HARMONIC
+         * 5: HAMMER
+         * 6: SLIDE
          */
         int velocity = note.getVelocity();
 		if(!tgChannel.isPercussionChannel()){
@@ -502,14 +505,18 @@ public class MidiSequenceParser {
                 velocity = 1;
             } else if(note.getEffect().isPalmMute()){
                 velocity = 2;
-            } else if(previousNote != null && previousNote.getNote().getEffect().isHammer()){
-				velocity = 3;
-			} else if(previousNote != null && previousNote.getNote().getEffect().isSlide()){
+            } else if(note.getEffect().isHarmonic() && note.getEffect().getHarmonic().isNatural()) {
+                velocity = 3;
+            } else if(note.getEffect().isHarmonic() && note.getEffect().getHarmonic().isSemi()) {
                 velocity = 4;
+            } else if(previousNote != null && previousNote.getNote().getEffect().isHammer()){
+				velocity = 5;
+			} else if(previousNote != null && previousNote.getNote().getEffect().isSlide()){
+                velocity = 6;
             }
 		}
 		
-        boolean hasVelocityCode = (velocity >= 1 && velocity <= 4);
+        boolean hasVelocityCode = (velocity >= 1 && velocity <= 6);
         if(!hasVelocityCode) {
             if(note.getEffect().isGhostNote()){
                 velocity = Math.max(TGVelocities.MIN_VELOCITY,(velocity - TGVelocities.VELOCITY_INCREMENT));
